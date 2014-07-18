@@ -1,55 +1,147 @@
 package bz.bosco.designreader;
 
+import android.app.AlertDialog;
 import android.app.ListActivity;
 import android.content.Context;
+import android.content.Intent;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.text.Html;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
-import android.widget.ArrayAdapter;
+import android.view.View;
+import android.widget.ListView;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.StatusLine;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.DefaultHttpClient;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.IOException;
+import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.Reader;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
+import java.util.ArrayList;
+import java.util.Random;
 
 
 public class MainListActivity extends ListActivity {
 
-    protected String[] mBlogPostTitles;
-    public static final int NUMBER_OF_POSTS = 20;
     public static final String TAG = MainListActivity.class.getSimpleName();
     protected JSONObject mBlogData;
+    protected ProgressBar mProgressbar;
+    private final String KEY_TITLE= "title";
+    private final String KEY_AUTHOR= "user_display_name";
+    private final String KEY_ID= "id";
+    private final String KEY_COMMENT_COUNT= "comment_count";
+    private final String KEY_VOTE_COUNT= "vote_count";
+    private final String KEY_DATE= "created_at";
+    private final String KEY_URL= "url";
+    private final String KEY_SITE_URL= "site_url";
+    private final String KEY_USER_ID= "user_id";
+    private final String KEY_PORTRAIT= "user_portrait_url";
+    private final String KEY_USER_JOB= "user_job";
+    private final String KEY_USER_URL= "user_url";
+    private final String KEY_COMMENTS= "comments";
+    private final String KEY_BADGE= "badge";
+
+    String[] imageId = {
+            "dn_blue",
+            "dn_green",
+            "dn_red",
+            "dn_yellow",
+            "dn_icon",
+    };
+
 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main_list);
 
+        mProgressbar = (ProgressBar) findViewById(R.id.progressBar);
+
 
         if (isNetworkAvailable()){
+            mProgressbar.setVisibility(View.VISIBLE);
             GetBlogPostTask getBlogPostTask = new GetBlogPostTask();
             getBlogPostTask.execute();
         }
+    }
 
-        //Resources resources = getResources();
-        //mBlogPostTitles = resources.getStringArray(R.array.android_names);
 
-        //ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,android.R.layout.simple_list_item_1, mBlogPostTitles);
-        //setListAdapter(adapter);
+    @Override
+    protected void onListItemClick(ListView l, View v, int position, long id) {
+        super.onListItemClick(l, v, position, id);
+        try {
+            JSONArray jsonPosts = mBlogData.getJSONArray("stories");
+            JSONObject jsonPost = jsonPosts.getJSONObject(position);
+            String blogUrl = jsonPost.getString(KEY_URL);
 
-        //Toast.makeText(this, getString(R.string.no_items),Toast.LENGTH_LONG).show();
+            Intent intent = new Intent(this, BlogWebViewActivity.class);
+            intent.setData(Uri.parse(blogUrl));
+            startActivity(intent);
+
+        } catch (JSONException e) {
+            logException(e);
+        }
+    }
+
+
+    private void handleBlogResponse() {
+        Random randomGenerator = new Random();
+        int len = imageId.length;
+        mProgressbar.setVisibility(View.INVISIBLE);
+        if (mBlogData == null){
+            updateDisplayForError();
+        }
+        else{
+            try {
+                JSONArray jsonPosts = mBlogData.getJSONArray("stories");
+                ArrayList <BlogPost> blogPosts = new ArrayList<BlogPost>();
+                for (int i = 0; i < jsonPosts.length();i++){
+                    JSONObject post = jsonPosts.getJSONObject(i);
+                    String title = post.getString(KEY_TITLE);
+                    title = Html.fromHtml(title).toString();
+                    String author = post.getString(KEY_AUTHOR);
+                    author = Html.fromHtml(author).toString();
+                    String badge= post.getString(KEY_BADGE);
+                    badge = Html.fromHtml(badge).toString();
+                    BlogPost blogPost = new BlogPost();
+                    blogPost.setTitle(title);
+                    blogPost.setUser_display_name(author);
+
+                    if (post.isNull(KEY_BADGE)) {
+                        int randomNumber = randomGenerator.nextInt(len);
+                        blogPost.setBadge(imageId[randomNumber]);
+                    }else{
+                        blogPost.setBadge(badge);
+                    }
+                    blogPosts.add(blogPost);
+
+                }
+
+                //String[] from = {KEY_TITLE, KEY_AUTHOR};
+                //int[] to = {android.R.id.text1, android.R.id.text2};
+                ListAdapter adapter = new ListAdapter(this, blogPosts);
+                setListAdapter(adapter);
+            } catch (JSONException e) {
+                logException(e);
+            }
+        }
+    }
+
+    private void logException(Exception e) {
+        Log.e(TAG, "Exception caught!", e);
     }
 
     private boolean isNetworkAvailable() {
@@ -67,96 +159,65 @@ public class MainListActivity extends ListActivity {
         return isAvailable;
     }
 
+    private void updateDisplayForError() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(getString(R.string.error_title));
+        builder.setMessage(getString(R.string.error_message));
+        builder.setPositiveButton(android.R.string.ok,null);
+        AlertDialog dialog = builder.create();
+        dialog.show();
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.main_list, menu);
-        return true;
-    }
-
-    private void updateList() {
-        if (mBlogData == null){
-            //TODO: Handle error
-        }
-        else{
-            try {
-                JSONArray jsonPosts = mBlogData.getJSONArray("posts");
-                mBlogPostTitles = new String[jsonPosts.length()];
-                for (int i = 0; i < jsonPosts.length();i++){
-                    JSONObject post = jsonPosts.getJSONObject(i);
-                    String title = post.getString("title");
-                    title= Html.fromHtml(title).toString();
-                    mBlogPostTitles[i] = title;
-                }
-
-                ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,android.R.layout.simple_list_item_1, mBlogPostTitles);
-                setListAdapter(adapter);
-            } catch (JSONException e) {
-                Log.e(TAG, "Exception caught!", e);
-            }
-        }
+        TextView emptyTextView = (TextView) getListView().getEmptyView();
+        emptyTextView.setText(getString(R.string.no_items));
     }
 
     private class GetBlogPostTask extends AsyncTask<Object, Void, JSONObject>{
 
         @Override
-        protected JSONObject doInBackground(Object[] params) {
+        protected JSONObject doInBackground(Object... params) {
             int responseCode = -1;
             JSONObject jsonResponse = null;
+            StringBuilder builder = new StringBuilder();
+            HttpClient client = new DefaultHttpClient();
+            HttpGet httpget = new HttpGet("https://api-news.layervault.com/api/v1/stories?client_id=dcc2b9a92a4fc65e2a8c09b74f8f15621c8969543f8c334a5d67135cf9fc78a5");
 
             try {
-                URL blogFeedUrl = new URL("http://blog.teamtreehouse.com/api/get_recent_summary/?count=20");
-                HttpURLConnection connection = (HttpURLConnection) blogFeedUrl.openConnection();
-                connection.connect();
+                HttpResponse response = client.execute(httpget);
+                StatusLine statusLine = response.getStatusLine();
+                responseCode = statusLine.getStatusCode();
 
-                responseCode = connection.getResponseCode();
-                if (responseCode == HttpURLConnection.HTTP_OK){
+                if (responseCode == HttpURLConnection.HTTP_OK) {
+                    HttpEntity entity = response.getEntity();
+                    InputStream content = entity.getContent();
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(content));
+                    String line;
+                    while((line = reader.readLine()) != null){
+                        builder.append(line);
+                    }
 
-                    InputStream inputStream = connection.getInputStream();
-                    Reader reader = new InputStreamReader(inputStream);
-                    int contentLength = connection.getContentLength();
-                    char[] charArray = new char[contentLength];
-                    reader.read(charArray);
-                    String responseData = new String(charArray);
-                    jsonResponse = new JSONObject(responseData);
-
+                    jsonResponse = new JSONObject(builder.toString());
                 }
-                else{
-                    Log.i(TAG, "Unsuccessful HTTP Response Code:" + responseCode);
+                else {
+                    Log.i(TAG, String.format("Unsuccessful HTTP response code: %d", responseCode));
                 }
             }
-            catch (MalformedURLException e){
-                Log.e(TAG, "Exception Caught", e);
+            catch (JSONException e) {
+                logException(e);
             }
-            catch (IOException e){
-                Log.e(TAG, "Exception Caught", e);
-            }
-            catch (Exception e){
-                Log.e(TAG, "Exception Caught", e);
+            catch (Exception e) {
+                logException(e);
             }
 
             return jsonResponse;
         }
+
         @Override
         protected void onPostExecute(JSONObject result){
             mBlogData = result;
-            updateList();
+            handleBlogResponse();
 
         }
 
     }
 
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-        if (id == R.id.action_settings) {
-            return true;
-        }
-        return super.onOptionsItemSelected(item);
-    }
 }

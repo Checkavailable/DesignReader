@@ -8,6 +8,22 @@
     <!-- ActionBar styles -->
     <style name="MyActionBar"
         parent="@android:style/Widget.Holo.Light.ActionBar.Solid.Inverse">
-        <item name="android:background">#2d72d9</item>
+        <item name="android:background">@color/blue</item>
+        <item name="android:backgroundStacked">@color/blue</item>
     </style>
 </resources>
+
+<!--
+    <?xml version="1.0" encoding="utf-8"?>
+    <resources>
+    <style name="CustomActionBarTheme"
+        parent="@android:style/Theme.Holo.Light.DarkActionBar">
+        <item name="android:actionBarTabStyle">@style/MyActionBarTabs</item>
+    </style>
+
+    <style name="MyActionBarTabs"
+        parent="@android:style/Widget.Holo.Light.ActionBar.TabView">
+        <item name="android:background">@drawable/actionbar_tab_indicator</item>
+    </style>
+</resources>
+-->
